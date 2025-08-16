@@ -128,8 +128,8 @@ public class RoundServiceMock : IRoundService {
         betAccepted = true;
     }
 
-    // Manual cashout is accepted if the server receives the request BEFORE crash time.
-    // Payout multiplier equals visual multiplier at the server receive time (client computes the same).
+    // Cashout accepted if the server receives the request BEFORE crash.
+    // Payout multiplier equals visual multiplier at the server receive time.
     public bool TryManualCashout(double visualMultiplier, double requestClientTime, double rttMillis) {
         if (!betAccepted) return false;
         double receiveTime = requestClientTime + (rttMillis * 0.5) / 1000.0;
@@ -199,9 +199,9 @@ public class CryptCrashGamePrototype : MonoBehaviour
     [Header("Bet Settings")]
     public float playerBalance = 1000f;
     public float currentBet = 10f;
-    public float minBet = 1f;
-    public float maxBet = 5000f;
-    public float betStep = 1f;
+    public float minBet = 10f;
+    public float maxBet = 100f;
+    public float betStep = 10f;
     public float targetMultiplier = 2.00f; // ≥ 1.01
 
     [Header("Phases")]
@@ -260,12 +260,20 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public Color warnColor = new Color(1f, 0.85f, 0.2f);
 
     [Header("History")]
-    public string[] gameHistory = new string[14];
-    private int historyIndex = 0;
+    public string[] gameHistory = new string[7];
+    private int historyCount = 0;
 
     private Func<double,double> animCurveFunc;
 
     private double AnimCurve(double t) { return (double)MultiplierAtTime((float)t); }
+
+    private void OnValidate()
+    {
+        if (minBet < 10f) minBet = 10f;
+        if (maxBet < minBet) maxBet = minBet;
+        if (betStep != 10f) betStep = 10f;
+        currentBet = Mathf.Clamp(currentBet, minBet, maxBet);
+    }
 
     private void OnEnable() { SetupUI(); }
 
@@ -275,7 +283,10 @@ public class CryptCrashGamePrototype : MonoBehaviour
         animCurveFunc = AnimCurve;
         server = new RoundServiceMock(rng, animCurveFunc, 1f - targetRTP, minCrash, maxCrash);
 
-        currentBet = Mathf.Clamp(currentBet, minBet, maxBet);
+        // Enforce required betting config at runtime
+        minBet = 10f; maxBet = 100f; betStep = 10f;
+        currentBet = Mathf.Clamp(currentBet < minBet ? minBet : currentBet, minBet, maxBet);
+
         targetMultiplier = Mathf.Max(1.01f, targetMultiplier);
 
         StartNewRound();
@@ -342,7 +353,7 @@ public class CryptCrashGamePrototype : MonoBehaviour
         if (betPlacedLocal && !settledThisRound)
         {
             AddToHistory(string.Format("CRASH x{0:F2} (−{1:F2})", currentMultiplier, currentBet));
-            if (statusText) { statusText.text = string.Format("💥 Краш x{0:F2}. Проигрыш", currentMultiplier); statusText.color = loseColor; }
+            if (statusText) { statusText.text = string.Format(" Краш x{0:F2}. Проигрыш", currentMultiplier); statusText.color = loseColor; }
         }
         else if (settledThisRound)
         {
@@ -407,6 +418,10 @@ public class CryptCrashGamePrototype : MonoBehaviour
         UpdateUI();
     }
 
+    // If you prefer wiring via Inspector, use these methods instead of passing numbers:
+    public void IncreaseBet() { AdjustBet(+betStep); }
+    public void DecreaseBet() { AdjustBet(-betStep); }
+
     private void PlaceBet()
     {
         if (!isBettingPhase || betPlacedLocal) return;
@@ -416,7 +431,7 @@ public class CryptCrashGamePrototype : MonoBehaviour
         playerBalance -= currentBet;
         betPlacedLocal = true;
         server.SubmitBet((decimal)currentBet, targetMultiplier);
-        FlashStatus(string.Format("✅ Ставка {0:0.##} @ x{1:0.00}", currentBet, targetMultiplier), winColor);
+        FlashStatus(string.Format(" Ставка {0:0.##} ", currentBet, targetMultiplier), winColor);
         UpdateUI();
     }
 
@@ -445,12 +460,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
             playerBalance += (float)payout;
             lastPayout = payout;
             settledThisRound = true;
-            FlashStatus(string.Format("✅ Выплата +{0:0.##} (x{1:0.00})", payout, payoutM), winColor);
+            FlashStatus(string.Format(" Выплата +{0:0.##} (x{1:0.00})", payout, payoutM), winColor);
             AddToHistory(string.Format("WIN x{0:0.00} (+{1:0.##})", payoutM, payout));
         }
         else
         {
-            FlashStatus("❌ Кешаут отклонён (поздно)", warnColor);
+            FlashStatus(" Кешаут отклонён (поздно)", warnColor);
         }
         UpdateUI();
     }
@@ -475,18 +490,18 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public void UpdateUI()
     {
         if (multiplierText) multiplierText.text = string.Format("x{0:F2}", currentMultiplier);
-        if (balanceText) balanceText.text = string.Format("💰 Баланс: {0:0.##}", playerBalance);
-        if (roundText) roundText.text = string.Format("🎯 Раунд {0}", currentRound + 1);
+        if (balanceText) balanceText.text = string.Format(" Баланс: {0:0.##}", playerBalance);
+        if (roundText) roundText.text = string.Format(" Раунд {0}", currentRound + 1);
         if (betText)
         {
             if (betPlacedLocal && isGameRunning && !settledThisRound)
-                betText.text = string.Format("Ставка: {0:0.##} @ x{1:0.00} | Текущ.: x{2:F2}", currentBet, targetMultiplier, currentMultiplier);
+                betText.text = string.Format("Ставка: {0:0.##} | Текущ.: x{2:F2}", currentBet, targetMultiplier, currentMultiplier);
             else if (settledThisRound)
                 betText.text = string.Format("Выплата: +{0:0.##}", lastPayout);
             else if (betPlacedLocal)
-                betText.text = string.Format("Ставка: {0:0.##} @ x{1:0.00}", currentBet, targetMultiplier);
+                betText.text = string.Format("Ставка: {0:0.##} ", currentBet, targetMultiplier);
             else
-                betText.text = string.Format("Ставка: {0:0.##} | Цель: x{1:0.00}", currentBet, targetMultiplier);
+                betText.text = string.Format("Ставка: {0:0.##} ", currentBet, targetMultiplier);
         }
 
         if (statusText)
@@ -494,12 +509,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
             if (isBettingPhase)
             {
                 float left = Mathf.Max(0f, bettingPhaseDuration - bettingPhaseTime);
-                statusText.text = betPlacedLocal ? string.Format("✅ Ставка принята • Старт через {0:F1}с", left) : string.Format("⏰ Фаза ставок • Осталось {0:F1}с", left);
+                statusText.text = betPlacedLocal ? string.Format(" Ставка принята • Старт через {0:F1}с", left) : string.Format(" Фаза ставок • Осталось {0:F1}с", left);
                 statusText.color = betPlacedLocal ? winColor : normalColor;
             }
             else if (isGameRunning)
             {
-                statusText.text = settledThisRound ? "✅ Выплата зафиксирована" : "🎮 Игра идет...";
+                statusText.text = settledThisRound ? " Выплата зафиксирована" : " Игра идет...";
                 statusText.color = settledThisRound ? winColor : normalColor;
             }
             else
@@ -532,25 +547,46 @@ public class CryptCrashGamePrototype : MonoBehaviour
     private void UpdateRevealPanel()
     {
         if (revealText == null || lastReveal == null) return;
-        revealText.text =
-            "Reveal:\n" +
-            "ServerSeed: " + lastReveal.ServerSeed + "\n" +
-            "HMAC: " + lastReveal.HmacHex + "\n" +
-            "u52: " + lastReveal.U52 + "\n" +
-            "U: " + lastReveal.U01.ToString("F12") + "\n" +
-            "Crash M: x" + lastReveal.CrashPoint.ToString("F2") + "\n";
+        var sb = new StringBuilder();
+        sb.AppendLine("Reveal:");
+        sb.AppendLine("ServerSeed: " + lastReveal.ServerSeed);
+        sb.AppendLine("HMAC: " + lastReveal.HmacHex);
+        sb.AppendLine("u52: " + lastReveal.U52);
+        sb.AppendLine("U: " + lastReveal.U01.ToString("F12"));
+        sb.AppendLine("Crash M: x" + lastReveal.CrashPoint.ToString("F2"));
+        revealText.text = sb.ToString();
     }
 
     private void AddToHistory(string s)
     {
-        if (historyIndex >= gameHistory.Length) historyIndex = 0;
-        gameHistory[historyIndex++] = s;
+        // Ensure fixed capacity = 7
+        if (gameHistory == null || gameHistory.Length != 7)
+            gameHistory = new string[7];
+
+        if (historyCount < gameHistory.Length)
+        {
+            // Append to the end while not full
+            gameHistory[historyCount] = s;
+            historyCount++;
+        }
+        else
+        {
+            // Full: drop index 0, shift others down, put new at index 6
+            for (int i = 1; i < gameHistory.Length; i++)
+                gameHistory[i - 1] = gameHistory[i];
+            gameHistory[gameHistory.Length - 1] = s;
+        }
+
         if (historyText)
         {
-            string t = "История:\n";
-            for (int i = 0; i < gameHistory.Length; i++)
-                if (!string.IsNullOrEmpty(gameHistory[i])) t += gameHistory[i] + "\n";
-            historyText.text = t;
+            var sb = new StringBuilder();
+            sb.AppendLine("История:");
+            int count = Mathf.Min(historyCount, gameHistory.Length);
+            for (int i = 0; i < count; i++)
+            {
+                if (!string.IsNullOrEmpty(gameHistory[i])) sb.AppendLine(gameHistory[i]);
+            }
+            historyText.text = sb.ToString();
         }
     }
 
