@@ -2,6 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using TMPro;
+using System.Security.Cryptography; // Для HMAC
+using System.Text; // Для Encoding
+using System; // Для BitConverter
 
 public class CrashGamePrototype : MonoBehaviour
 {
@@ -53,15 +56,26 @@ public class CrashGamePrototype : MonoBehaviour
     public string[] gameHistory = new string[10];
     public int historyIndex = 0;
     
+    [Header("Multiplier & RTP Settings")] // Новое: Параметры для роста и RTP
+    public float k = 0.04140147f; // Подогнанный для контрольных точек
+    public float n = 1.20439294f; // Подогнанный для контрольных точек
+    public float epsilon = 0.04f; // House edge для RTP 96%
+    public float minCrash = 1.01f;
+    public float maxCrash = 1000f;
+    
     private Coroutine gameCoroutine;
+    private string serverSeed = "fake_server_seed"; // Fake для прототипа
+    private string clientSeed = "fake_client_seed";
+    private long nonce = 0;
     
     private void Start()
     {
-        // Инициализируем игру
         playerBalance = 1000f;
         currentBet = Mathf.Clamp(10f, minBet, maxBet);
         
-        // Запускаем систему раундов (UI создастся автоматически)
+        // Симуляция RTP для валидации математики
+        SimulateRTP(10000); // 10k раундов, лог в консоль
+        
         StartNewRound();
     }
     
@@ -77,8 +91,8 @@ public class CrashGamePrototype : MonoBehaviour
     {
         gameTime += Time.deltaTime;
         
-        // Рассчитываем текущий множитель
-        currentMultiplier = Mathf.Pow(1.1f, gameTime);
+        // Улучшенная формула роста множителя с динамическим ускорением
+        currentMultiplier = GetMultiplier(gameTime);
         
         // Проверяем краш
         if (currentMultiplier >= crashPoint)
@@ -87,6 +101,115 @@ public class CrashGamePrototype : MonoBehaviour
         }
         
         UpdateUI();
+    }
+    
+    // Улучшенная: Формула роста множителя (fit под контрольные точки)
+    private float GetMultiplier(float timeInSeconds)
+    {
+        if (timeInSeconds <= 0) return 1.0f;
+        float expValue = k * Mathf.Pow(timeInSeconds, n);
+        return Mathf.Clamp(Mathf.Exp(expValue), 1.0f, maxCrash);
+    }
+    
+    // Новая: Текущая скорость роста (dm/dt) для управления динамикой
+    public float GetGrowthRate(float timeInSeconds)
+    {
+        if (timeInSeconds <= 0) return 0f;
+        float m = GetMultiplier(timeInSeconds);
+        return m * k * n * Mathf.Pow(timeInSeconds, n - 1f);
+    }
+    
+    // Новая: Ускорение (d²m/dt²) для продвинутой анимации/эффектов
+    public float GetAcceleration(float timeInSeconds)
+    {
+        if (timeInSeconds <= 0) return 0f;
+        float m = GetMultiplier(timeInSeconds);
+        float term1 = k * n * Mathf.Pow(timeInSeconds, n - 1f);
+        float term2 = k * n * (n - 1f) * Mathf.Pow(timeInSeconds, n - 2f);
+        return m * (term1 * term1 + term2);
+    }
+    
+    // Улучшенная: Генерация краш-пойнта с RTP 96% (Provably Fair симуляция)
+    private float GenerateCrashPoint()
+    {
+        // Симулируем Provably Fair
+        string combined = clientSeed + nonce.ToString() + currentRound.ToString();
+        byte[] hmacBytes = ComputeHMAC(serverSeed, combined);
+        ulong u52 = BitConverter.ToUInt64(hmacBytes, 0) >> 12; // Первые 52 бита
+        double u = (double)u52 / Math.Pow(2, 52);
+        
+        // Формула для M с RTP 96%
+        float m = (1f - epsilon) / (1f - (float)u);
+        nonce++; // Инкремент для следующего раунда
+        
+        return Mathf.Clamp(m, minCrash, maxCrash);
+    }
+    
+    // Новая: Вычисление HMAC для Provably Fair
+    private byte[] ComputeHMAC(string key, string message)
+    {
+        using (HMACSHA256 hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key)))
+        {
+            return hmac.ComputeHash(Encoding.UTF8.GetBytes(message));
+        }
+    }
+    
+    // Новая: Симуляция RTP с поведением игроков (валидация математики)
+    private void SimulateRTP(int rounds)
+    {
+        float totalBets = 0f;
+        float totalPayouts = 0f;
+        int wins = 0;
+        float betAmount = 100f;
+        
+        // Для распределения крашей (buckets как в docs)
+        int[] buckets = new int[7]; // 1.01-2, 2.01-5, 5.01-10, 10.01-20, 20.01-50, 50.01-100, 100+
+        float[] bucketEdges = {1.01f, 2f, 5f, 10f, 20f, 50f, 100f, float.MaxValue};
+        
+        for (int i = 0; i < rounds; i++)
+        {
+            float crash = GenerateCrashPoint();
+            totalBets += betAmount;
+            float target = SampleTarget(); // Random target
+            if (crash >= target)
+            {
+                float payout = betAmount * target;
+                totalPayouts += payout;
+                wins++;
+            }
+            
+            // Bucket count
+            for (int b = 0; b < bucketEdges.Length - 1; b++)
+            {
+                if (crash > bucketEdges[b] && crash <= bucketEdges[b+1])
+                {
+                    buckets[b]++;
+                    break;
+                }
+            }
+        }
+        
+        float rtp = (totalPayouts / totalBets) * 100f;
+        float winrate = (wins / (float)rounds) * 100f;
+        
+        Debug.Log($"RTP Simulation ({rounds} rounds): RTP = {rtp:F4}%, Winrate = {winrate:F2}%");
+        Debug.Log("Crash Distribution:");
+        string[] bucketNames = {"1.01-2.00", "2.01-5.00", "5.01-10.00", "10.01-20.00", "20.01-50.00", "50.01-100.00", "100.01+"};
+        for (int b = 0; b < buckets.Length; b++)
+        {
+            float pct = (buckets[b] / (float)rounds) * 100f;
+            Debug.Log($"{bucketNames[b]}: {pct:F2}%");
+        }
+    }
+    
+    // Сэмплинг target (поведение игроков, как в симуляциях)
+    private float SampleTarget()
+    {
+        float r = UnityEngine.Random.Range(0f, 1f);
+        if (r < 0.55f) return 1.10f + UnityEngine.Random.Range(0f, 1.40f);
+        if (r < 0.85f) return 2.50f + UnityEngine.Random.Range(0f, 2.50f);
+        if (r < 0.97f) return 5.00f + UnityEngine.Random.Range(0f, 5.00f);
+        return 10.00f + UnityEngine.Random.Range(0f, 40.00f);
     }
     
     public void SetupUI()
@@ -134,344 +257,229 @@ public class CrashGamePrototype : MonoBehaviour
             Debug.LogWarning("⚠️ DecreaseBetButton не найден");
         }
         
-        Debug.Log("✅ UI обработчики настроены");
+        UpdateUI();
     }
     
     public void PlaceBet()
     {
-        // Если игра идет и уже был кешаут - блокируем
-        if (isGameRunning && hasCashedOut)
+        if (isBettingPhase)
         {
-            return;
-        }
-        
-        // Если в фазе ставок и ставка еще не размещена
-        if (isBettingPhase && !hasPlacedBet)
-        {
-            hasPlacedBet = true;
-            playerBalance -= currentBet;
+            if (hasPlacedBet)
+            {
+                // Отменяем ставку
+                hasPlacedBet = false;
+                playerBalance += currentBet;
+                statusText.text = "Ставка отменена";
+                statusText.color = missedColor;
+            }
+            else
+            {
+                // Размещаем ставку
+                if (playerBalance >= currentBet)
+                {
+                    playerBalance -= currentBet;
+                    hasPlacedBet = true;
+                    statusText.text = "Ставка размещена!";
+                    statusText.color = winColor;
+                }
+                else
+                {
+                    statusText.text = "Недостаточно средств!";
+                    statusText.color = loseColor;
+                }
+            }
             UpdateUI();
-            return;
         }
-        
-        // Если в фазе ставок и ставка уже размещена - отменяем
-        if (isBettingPhase && hasPlacedBet)
+        else if (!isGameRunning && !hasPlacedBet)
         {
-            hasPlacedBet = false;
-            playerBalance += currentBet;
+            // Размещаем ставку вне фазы ставок (для тестов)
+            if (playerBalance >= currentBet)
+            {
+                playerBalance -= currentBet;
+                hasPlacedBet = true;
+                statusText.text = "Ставка размещена!";
+                statusText.color = winColor;
+                StartGame();
+            }
+            else
+            {
+                statusText.text = "Недостаточно средств!";
+                statusText.color = loseColor;
+            }
             UpdateUI();
-            return;
-        }
-        
-        // Если игра идет и ставка не размещена - размещаем
-        if (isGameRunning && !hasPlacedBet && !hasCashedOut)
-        {
-            hasPlacedBet = true;
-            playerBalance -= currentBet;
-            UpdateUI();
-            return;
         }
     }
     
     public void Cashout()
     {
-        Debug.Log($"🔘 Cashout вызван! isGameRunning={isGameRunning}, hasPlacedBet={hasPlacedBet}, hasCashedOut={hasCashedOut}");
-        
-        if (!isGameRunning || !hasPlacedBet || hasCashedOut) 
+        if (isGameRunning && hasPlacedBet && !hasCashedOut)
         {
-            Debug.Log("❌ Cashout: условие не выполнено");
-            return;
-        }
-        
-        hasCashedOut = true;
-        finalWinAmount = currentBet * currentMultiplier;
-        playerBalance += finalWinAmount;
-        
-        Debug.Log($"✅ Кешаут! Выигрыш: {finalWinAmount:F2}");
-        
-        AddToHistory($"WIN x{currentMultiplier:F2}");
-        
-        UpdateUI();
-    }
-    
-    public void IncreaseBet()
-    {
-        if (isGameRunning || hasPlacedBet) return;
-        
-        currentBet = Mathf.Min(currentBet + betStep, maxBet);
-        UpdateUI();
-    }
-    
-    public void DecreaseBet()
-    {
-        if (isGameRunning || hasPlacedBet) return;
-        
-        currentBet = Mathf.Max(currentBet - betStep, minBet);
-        // Дополнительная проверка для гарантии
-        if (currentBet < minBet) currentBet = minBet;
-        
-        UpdateUI();
-    }
-    
-    private void StartNewRound()
-    {
-        // Генерируем новый краш-пойнт
-        crashPoint = GenerateCrashPoint();
-        
-        // Сбрасываем состояние игры
-        isGameRunning = false;
-        hasPlacedBet = false;
-        hasCashedOut = false;
-        currentMultiplier = 1f;
-        finalWinAmount = 0f;
-        
-        // Начинаем фазу ставок
-        isBettingPhase = true;
-        bettingPhaseTime = 0f;
-        
-        // Настраиваем состояние кнопок
-        SetBettingPhaseButtonStates();
-        
-        // Запускаем фазу ставок
-        StartCoroutine(BettingPhase());
-    }
-    
-    private IEnumerator BettingPhase()
-    {
-        while (bettingPhaseTime < bettingPhaseDuration && isBettingPhase)
-        {
-            bettingPhaseTime += Time.deltaTime;
+            hasCashedOut = true;
+            finalWinAmount = currentBet * currentMultiplier;
+            playerBalance += finalWinAmount;
+            statusText.text = $"Кешаут на x{currentMultiplier:F2}! Выигрыш: {finalWinAmount:F0}";
+            statusText.color = winColor;
+            AddToHistory($"WIN x{currentMultiplier:F2}");
             UpdateUI();
-            yield return null;
-        }
-        
-        // Фаза ставок закончилась
-        isBettingPhase = false;
-        
-        // Начинаем игровую фазу независимо от того, поставил ли игрок ставку
-        StartGame();
-    }
-    
-    private void StartGame()
-    {
-        // Запускаем игру
-        isGameRunning = true;
-        
-        // Игра продолжается до краша или кешаута
-        gameCoroutine = StartCoroutine(GameLoop());
-    }
-    
-    private IEnumerator GameLoop()
-    {
-        gameTime = 0f;
-        
-        while (isGameRunning)
-        {
-            gameTime += Time.deltaTime;
-            
-            // Рассчитываем текущий множитель
-            currentMultiplier = Mathf.Pow(1.1f, gameTime);
-            
-            // Проверяем краш
-            if (currentMultiplier >= crashPoint)
-            {
-                Crash();
-                break;
-            }
-            
-            UpdateUI();
-            yield return null;
         }
     }
     
     private void Crash()
     {
-        if (!isGameRunning) return;
-        
-        // Добавляем в историю
-        AddToHistory($"CRASH x{currentMultiplier:F2}");
-        
-        // Показываем результат
-        if (hasPlacedBet && !hasCashedOut)
+        isGameRunning = false;
+        if (!hasCashedOut && hasPlacedBet)
         {
-            // Игрок проиграл
-            if (statusText != null)
-            {
-                statusText.text = "Краш! Проигрыш";
-                statusText.color = loseColor;
-            }
+            statusText.text = $"КРАШ на x{crashPoint:F2}! Проигрыш: -{currentBet:F0}";
+            statusText.color = loseColor;
+            AddToHistory($"CRASH x{crashPoint:F2}");
+            finalWinAmount = 0f;
         }
-        else if (hasCashedOut)
+        else if (hasPlacedBet)
         {
-            // Игрок уже забрал выигрыш
-            if (statusText != null)
-            {
-                statusText.text = "УПУЩЕНО!";
-                statusText.color = missedColor;
-            }
+            statusText.text += $"\nКРАШ на x{crashPoint:F2}";
         }
         else
         {
-            // Игрок не участвовал
-            if (statusText != null)
-            {
-                statusText.text = $"Краш! x{currentMultiplier:F2} (игрок не участвовал)";
-                statusText.color = normalColor;
-            }
+            statusText.text = $"КРАШ на x{crashPoint:F2}! Вы не ставили.";
+            statusText.color = missedColor;
+            AddToHistory($"MISSED x{crashPoint:F2}");
         }
-        
-        // Завершаем раунд
-        EndRound();
+        UpdateUI();
+        StartCoroutine(WaitForNextRound());
     }
     
-    private void EndRound()
+    private IEnumerator WaitForNextRound()
     {
-        isGameRunning = false;
-        
-        if (gameCoroutine != null)
-        {
-            StopCoroutine(gameCoroutine);
-        }
-        
-        // Запускаем новый раунд через 2 секунды
-        StartCoroutine(DelayedNewRound());
-    }
-    
-    private IEnumerator DelayedNewRound()
-    {
-        yield return new WaitForSeconds(2f);
-        currentRound++;
+        yield return new WaitForSeconds(3f);
+        ResetRound();
         StartNewRound();
     }
     
-    private void SetBettingPhaseButtonStates()
+    private void ResetRound()
     {
-        if (placeBetButton != null)
+        hasPlacedBet = false;
+        hasCashedOut = false;
+        currentMultiplier = 1f;
+        gameTime = 0f;
+        finalWinAmount = 0f;
+        isGameRunning = false;
+        isBettingPhase = false;
+    }
+    
+    public void StartNewRound()
+    {
+        currentRound++;
+        crashPoint = GenerateCrashPoint();
+        ResetRound();
+        isBettingPhase = true;
+        bettingPhaseTime = 0f;
+        StartCoroutine(BettingPhase());
+        UpdateUI();
+    }
+    
+    private IEnumerator BettingPhase()
+    {
+        while (bettingPhaseTime < bettingPhaseDuration)
         {
-            placeBetButton.interactable = true;
+            bettingPhaseTime += Time.deltaTime;
+            UpdateUI();
+            yield return null;
         }
-        
-        if (increaseBetButton != null)
+        isBettingPhase = false;
+        if (hasPlacedBet)
         {
-            increaseBetButton.interactable = !hasPlacedBet;
+            StartGame();
         }
-        
-        if (decreaseBetButton != null)
+        else
         {
-            decreaseBetButton.interactable = !hasPlacedBet;
+            statusText.text = "Ставка не размещена! Раунд пропущен.";
+            statusText.color = missedColor;
+            StartCoroutine(WaitForNextRound());
         }
-        
-        if (cashoutButton != null)
+    }
+    
+    private void StartGame()
+    {
+        isGameRunning = true;
+        statusText.text = "Игра началась!";
+        statusText.color = normalColor;
+        UpdateUI();
+    }
+    
+    public void IncreaseBet()
+    {
+        if (isBettingPhase && !hasPlacedBet)
         {
-            cashoutButton.interactable = false;
+            currentBet = Mathf.Clamp(currentBet + betStep, minBet, maxBet);
+            UpdateUI();
+        }
+    }
+    
+    public void DecreaseBet()
+    {
+        if (isBettingPhase && !hasPlacedBet)
+        {
+            currentBet = Mathf.Clamp(currentBet - betStep, minBet, maxBet);
+            UpdateUI();
         }
     }
     
     private void SetButtonStates(bool gameRunning)
     {
         if (placeBetButton != null)
-        {
-            // Блокируем кнопку ставки если уже был кешаут
-            placeBetButton.interactable = !hasCashedOut;
-        }
+            placeBetButton.interactable = !gameRunning && !hasPlacedBet;
         
         if (cashoutButton != null)
-        {
-            bool shouldBeInteractable = gameRunning && hasPlacedBet && !hasCashedOut;
-            cashoutButton.interactable = shouldBeInteractable;
-            Debug.Log($"🔘 Кешаут кнопка: gameRunning={gameRunning}, hasPlacedBet={hasPlacedBet}, hasCashedOut={hasCashedOut}, interactable={shouldBeInteractable}");
-        }
+            cashoutButton.interactable = gameRunning && hasPlacedBet && !hasCashedOut;
         
         if (increaseBetButton != null)
-        {
             increaseBetButton.interactable = !gameRunning && !hasPlacedBet;
-        }
         
         if (decreaseBetButton != null)
-        {
             decreaseBetButton.interactable = !gameRunning && !hasPlacedBet;
-        }
+    }
+    
+    private void SetBettingPhaseButtonStates()
+    {
+        if (placeBetButton != null)
+            placeBetButton.interactable = true;
+        
+        if (cashoutButton != null)
+            cashoutButton.interactable = false;
+        
+        if (increaseBetButton != null)
+            increaseBetButton.interactable = !hasPlacedBet;
+        
+        if (decreaseBetButton != null)
+            decreaseBetButton.interactable = !hasPlacedBet;
     }
     
     public void UpdateUI()
     {
-        // Обновляем тексты
         if (multiplierText != null)
+        {
             multiplierText.text = $"x{currentMultiplier:F2}";
+            if (isGameRunning)
+                multiplierText.color = normalColor;
+            else if (hasCashedOut)
+                multiplierText.color = winColor;
+            else
+                multiplierText.color = loseColor;
+        }
         
         if (balanceText != null)
-            balanceText.text = $"💰 Баланс: {playerBalance:F0}";
-        
-        // Обновляем номер раунда
-        if (roundText != null)
-        {
-            roundText.text = $"🎯 Раунд {currentRound}";
-        }
+            balanceText.text = $"Баланс: {playerBalance:F0}";
         
         if (betText != null)
-        {
-            if (hasPlacedBet && isGameRunning)
-            {
-                float potentialWin = currentBet * currentMultiplier;
-                betText.text = $"Ставка: {currentBet:F0} | Выигрыш: {potentialWin:F0}";
-                betText.color = normalColor;
-            }
-            else if (hasCashedOut && isGameRunning)
-            {
-                betText.text = $"Ставка: {currentBet:F0} | Забрано: +{finalWinAmount:F0}";
-                betText.color = winColor;
-            }
-            else
-            {
-                betText.text = $"Ставка: {currentBet:F0}";
-                betText.color = normalColor;
-            }
-        }
+            betText.text = $"Ставка: {currentBet:F0}";
         
-        if (statusText != null)
+        if (roundText != null)
+            roundText.text = $"Раунд: {currentRound}";
+        
+        if (statusText != null && string.IsNullOrEmpty(statusText.text))
         {
-            if (isBettingPhase)
-            {
-                float timeLeft = bettingPhaseDuration - bettingPhaseTime;
-                if (hasPlacedBet)
-                {
-                    statusText.text = $"✅ Ставка размещена! Осталось: {timeLeft:F1}с";
-                    statusText.color = winColor;
-                }
-                else
-                {
-                    statusText.text = $"⏰ Фаза ставок! Осталось: {timeLeft:F1}с";
-                    statusText.color = normalColor;
-                }
-            }
-            else if (isGameRunning)
-            {
-                if (hasPlacedBet)
-                {
-                    statusText.text = "🎮 Игра идет...";
-                    statusText.color = normalColor;
-                }
-                else if (hasCashedOut)
-                {
-                    statusText.text = $"Кешаут! +{finalWinAmount:F0}";
-                    statusText.color = winColor;
-                }
-                else
-                {
-                    statusText.text = "👀 Игра продолжается...";
-                    statusText.color = normalColor;
-                }
-            }
-            else if (hasPlacedBet)
-            {
-                statusText.text = "Готов к игре";
-                statusText.color = normalColor;
-            }
-            else
-            {
-                statusText.text = "Разместите ставку";
-                statusText.color = normalColor;
-            }
+            statusText.text = "Разместите ставку";
+            statusText.color = normalColor;
         }
         
         // Обновляем историю
@@ -576,12 +584,4 @@ public class CrashGamePrototype : MonoBehaviour
         
         UpdateHistoryUI();
     }
-    
-    private float GenerateCrashPoint()
-    {
-        // Простая реализация генерации краш-пойнта с RTP ~96%
-        float random = Random.Range(0f, 1f);
-        float crashPoint = 1f / (1f - random * 0.96f);
-        return Mathf.Clamp(crashPoint, 1.01f, 1000f);
-    }
-} 
+}
