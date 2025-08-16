@@ -49,23 +49,54 @@ public class CrashGamePrototype : MonoBehaviour
         StartNewRound();
     }
     
-    private void SetupUI()
+    public void SetupUI()
     {
+        Debug.Log("🔧 Настройка UI обработчиков...");
+        
         // Настройка кнопок
         if (placeBetButton != null)
+        {
             placeBetButton.onClick.AddListener(PlaceBet);
+            Debug.Log("✅ PlaceBetButton обработчик добавлен");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ PlaceBetButton не найден");
+        }
         
         if (cashoutButton != null)
+        {
             cashoutButton.onClick.AddListener(Cashout);
+            Debug.Log("✅ CashoutButton обработчик добавлен");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ CashoutButton не найден");
+        }
         
         if (increaseBetButton != null)
+        {
             increaseBetButton.onClick.AddListener(IncreaseBet);
+            Debug.Log("✅ IncreaseBetButton обработчик добавлен");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ IncreaseBetButton не найден");
+        }
         
         if (decreaseBetButton != null)
+        {
             decreaseBetButton.onClick.AddListener(DecreaseBet);
+            Debug.Log("✅ DecreaseBetButton обработчик добавлен");
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ DecreaseBetButton не найден");
+        }
         
         // Начальное состояние кнопок
         SetButtonStates(false);
+        Debug.Log("✅ UI обработчики настроены");
     }
     
     private void Update()
@@ -90,7 +121,7 @@ public class CrashGamePrototype : MonoBehaviour
         UpdateUI();
     }
     
-    private void UpdateUI()
+    public void UpdateUI()
     {
         // Обновляем тексты
         if (multiplierText != null)

@@ -187,45 +187,60 @@ public class UISetupHelper : MonoBehaviour
         
         foreach (TextMeshProUGUI text in texts)
         {
+            Debug.Log($"🔍 Найден текст: {text.name}");
             switch (text.name)
             {
                 case "MultiplierText":
                     prototype.multiplierText = text;
+                    Debug.Log("✅ MultiplierText присвоен");
                     break;
                 case "BalanceText":
                     prototype.balanceText = text;
+                    Debug.Log("✅ BalanceText присвоен");
                     break;
                 case "BetText":
                     prototype.betText = text;
+                    Debug.Log("✅ BetText присвоен");
                     break;
                 case "StatusText":
                     prototype.statusText = text;
+                    Debug.Log("✅ StatusText присвоен");
                     break;
                 case "HistoryText":
                     prototype.historyText = text;
+                    Debug.Log("✅ HistoryText присвоен");
                     break;
             }
         }
         
         foreach (Button button in buttons)
         {
+            Debug.Log($"🔍 Найдена кнопка: {button.name}");
             switch (button.name)
             {
                 case "PlaceBetButton":
                     prototype.placeBetButton = button;
+                    Debug.Log("✅ PlaceBetButton присвоена");
                     break;
                 case "CashoutButton":
                     prototype.cashoutButton = button;
+                    Debug.Log("✅ CashoutButton присвоена");
                     break;
                 case "IncreaseBetButton":
                     prototype.increaseBetButton = button;
+                    Debug.Log("✅ IncreaseBetButton присвоена");
                     break;
                 case "DecreaseBetButton":
                     prototype.decreaseBetButton = button;
+                    Debug.Log("✅ DecreaseBetButton присвоена");
                     break;
             }
         }
         
         Debug.Log("✅ Скрипт прототипа настроен");
+        
+        // Вызываем SetupUI для настройки обработчиков событий
+        prototype.SetupUI();
+        prototype.UpdateUI();
     }
 } 
