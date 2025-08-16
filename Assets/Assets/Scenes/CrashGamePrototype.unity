@@ -410,7 +410,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1234567891}
   - component: {fileID: 1234567892}
-  - component: {fileID: 1234567893}
+  - component: {fileID: 1234567894}
+  - component: {fileID: 1234567895}
   m_Layer: 0
   m_Name: CrashGamePrototype
   m_TagString: Untagged
@@ -450,6 +451,9 @@ MonoBehaviour:
   betText: {fileID: 0}
   statusText: {fileID: 0}
   historyText: {fileID: 0}
+  finalWinText: {fileID: 0}
+  roundText: {fileID: 0}
+  bettingProgressBar: {fileID: 0}
   placeBetButton: {fileID: 0}
   cashoutButton: {fileID: 0}
   increaseBetButton: {fileID: 0}
@@ -460,11 +464,17 @@ MonoBehaviour:
   maxBet: 100
   betStep: 5
   isGameRunning: 0
+  isBettingPhase: 0
   hasPlacedBet: 0
+  hasCashedOut: 0
   currentMultiplier: 1
   crashPoint: 1
   gameTime: 0
   maxGameTime: 60
+  finalWinAmount: 0
+  bettingPhaseDuration: 5
+  bettingPhaseTime: 0
+  currentRound: 1
   gameHistory:
   - 
   - 
@@ -477,7 +487,11 @@ MonoBehaviour:
   - 
   - 
   historyIndex: 0
---- !u!114 &1234567893
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  winColor: {r: 0, g: 1, b: 0, a: 1}
+  loseColor: {r: 1, g: 0, b: 0, a: 1}
+  missedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!114 &1234567894
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -486,10 +500,23 @@ MonoBehaviour:
   m_GameObject: {fileID: 1234567890}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2f8c2c1ca5d5c1949b80596c69b212d2, type: 3}
+  m_Script: {fileID: 11500000, guid: e779fc73114d5cc41bdb57d19b4279ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoSetupOnStart: 1
+  debugOnStart: 0
+  debugOnClick: 1
+--- !u!114 &1234567895
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1234567890}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 89cce63b4fef1b84e99477d857fa31c5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
