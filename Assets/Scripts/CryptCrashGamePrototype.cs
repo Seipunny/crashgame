@@ -480,16 +480,56 @@ public class CryptCrashGamePrototype : MonoBehaviour
 
     private float MultiplierAtTime(float t)
     {
-        if (t <= 0f) return 1f;
-        if (t <= 8f)       return Mathf.Min(1f + t / 8f, maxCrash);
-        else if (t <= 35f) { float nt = (t - 8f) / 27f; float g = nt * nt * 0.8f + 0.2f * nt; return Mathf.Min(2f + 18f * g, maxCrash); }
-        else if (t <= 50f) { float nt = (t - 35f) / 15f; float g = nt * nt * nt; return Mathf.Min(20f + 80f * g, maxCrash); }
-        else               { float ex = t - 50f; float g = 1f - Mathf.Exp(-ex / 30f); return Mathf.Min(100f + 900f * g, maxCrash); }
+        // Smooth, C1-continuous curve with strictly increasing target slopes at the anchors
+        // Anchors: (0,1) -> (8,2) -> (35,20) -> (50,100)
+        const float t0 = 0f,  v0 = 1f;
+        const float t1 = 8f,  v1 = 2f;
+        const float t2 = 35f, v2 = 20f;
+        const float t3 = 50f, v3 = 100f;
+
+        // Desired slopes (dM/dt) at anchors (monotonically increasing)
+        // Tune if you want a different feel; these avoid any pause at junctions
+        const float m0 = 0.08f;   // start gentle
+        const float m1 = 0.14f;   // a bit faster by 8s
+        const float m2 = 1.20f;   // much faster by 35s
+        const float m3 = 2.50f;   // even faster by 50s
+
+        float y;
+        if (t <= t1)
+            y = Hermite(t, t0, t1, v0, v1, m0, m1);
+        else if (t <= t2)
+            y = Hermite(t, t1, t2, v1, v2, m1, m2);
+        else if (t <= t3)
+            y = Hermite(t, t2, t3, v2, v3, m2, m3);
+        else
+        {
+            // Tail: exponential with matched value & slope at t3, then clamped to maxCrash
+            const float k = 1f / 30f; // growth rate of the tail
+            float dt = t - t3;
+            y = v3 + (m3 / k) * (Mathf.Exp(k * dt) - 1f);
+        }
+
+        return Mathf.Min(y, maxCrash);
+    }
+
+    // Cubic Hermite between two anchors (t0,v0,m0) and (t1,v1,m1)
+    private static float Hermite(float t, float t0, float t1, float v0, float v1, float m0, float m1)
+    {
+        float dt = t1 - t0;
+        if (dt <= 1e-6f) return v0;
+        float u = Mathf.Clamp01((t - t0) / dt);
+        float u2 = u * u;
+        float u3 = u2 * u;
+        float h00 =  2f*u3 - 3f*u2 + 1f;
+        float h10 =      u3 - 2f*u2 + u;
+        float h01 = -2f*u3 + 3f*u2;
+        float h11 =      u3 -     u2;
+        return h00 * v0 + h10 * dt * m0 + h01 * v1 + h11 * dt * m1;
     }
 
     public void UpdateUI()
     {
-        if (multiplierText) multiplierText.text = string.Format("x{0:F2}", currentMultiplier);
+        if (multiplierText) multiplierText.text = string.Format("x{0:F3}", currentMultiplier);
         if (balanceText) balanceText.text = string.Format(" Баланс: {0:0.##}", playerBalance);
         if (roundText) roundText.text = string.Format(" Раунд {0}", currentRound + 1);
         if (betText)
