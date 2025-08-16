@@ -96,4 +96,8 @@ public static class MultiplierCalculator
             if (accuracy > 95f)
                 Debug.Log("✅ ПРОЙДЕНО");
             else
+                Debug.Log("❌ НЕ ПРОЙДЕНО");
+        }
+    }
+}
  

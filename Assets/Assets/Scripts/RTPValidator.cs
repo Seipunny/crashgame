@@ -25,29 +25,6 @@ public static class RTPValidator
         public float maxCrashPoint;
         public float maxWin;
         public float testDuration;
-        
-        public ValidationResult()
-        {
-            totalBets = 0f;
-            totalPayouts = 0f;
-            actualRTP = 0f;
-            successRate = 0f;
-            successfulGames = 0;
-            failedGames = 0;
-            crashDistribution = new Dictionary<string, int>
-            {
-                {"1.01-2.00", 0},
-                {"2.01-5.00", 0}, 
-                {"5.01-10.00", 0},
-                {"10.01-20.00", 0},
-                {"20.01-50.00", 0},
-                {"50.01-100.00", 0},
-                {"100.01+", 0}
-            };
-            maxCrashPoint = 0f;
-            maxWin = 0f;
-            testDuration = 0f;
-        }
     }
     
     /// <summary>
@@ -57,7 +34,28 @@ public static class RTPValidator
     /// <returns>Результат валидации</returns>
     public static ValidationResult ValidateRTP(int numberOfRounds = 100000)
     {
-        var result = new ValidationResult();
+        var result = new ValidationResult
+        {
+            totalBets = 0f,
+            totalPayouts = 0f,
+            actualRTP = 0f,
+            successRate = 0f,
+            successfulGames = 0,
+            failedGames = 0,
+            crashDistribution = new Dictionary<string, int>
+            {
+                {"1.01-2.00", 0},
+                {"2.01-5.00", 0}, 
+                {"5.01-10.00", 0},
+                {"10.01-20.00", 0},
+                {"20.01-50.00", 0},
+                {"50.01-100.00", 0},
+                {"100.01+", 0}
+            },
+            maxCrashPoint = 0f,
+            maxWin = 0f,
+            testDuration = 0f
+        };
         float startTime = Time.realtimeSinceStartup;
         
         Debug.Log($"Начинаем валидацию RTP на {numberOfRounds:N0} раундов...");
@@ -72,7 +70,7 @@ public static class RTPValidator
             
             result.totalBets += bet;
             
-            if (cashoutPoint <= crashPoint)
+            if (cashoutPoint > 0f)
             {
                 // Игрок успел забрать
                 float winAmount = bet * cashoutPoint;
@@ -86,7 +84,7 @@ public static class RTPValidator
             }
             else
             {
-                // Игрок проиграл
+                // Игрок проиграл (не успел кешаутиться)
                 result.failedGames++;
             }
             
@@ -117,22 +115,27 @@ public static class RTPValidator
     /// <returns>Мультипликатор кешаута</returns>
     private static float SimulatePlayerBehavior(float crashPoint)
     {
-        // Упрощенная модель поведения игрока
-        // Игрок кешаутится с вероятностью 96% на случайной точке до краша
+        // Реалистичная модель поведения игрока (как в HTML файле)
+        // Игрок выбирает целевую точку кешаута и кешаутится, если успевает
         
-        float random = UnityEngine.Random.Range(0f, 1f);
+        float target = SampleTargetStandard();
         
-        if (random < 0.96f)
-        {
-            // Игрок кешаутится на случайной точке до краша
-            float cashoutPoint = 1.0f + random * (crashPoint - 1.0f);
-            return cashoutPoint;
-        }
-        else
-        {
-            // Игрок не успевает кешаутиться (4% случаев)
-            return crashPoint;
-        }
+        // Игрок кешаутится, если краш происходит после его целевой точки
+        return crashPoint >= target ? target : 0f;
+    }
+    
+    /// <summary>
+    /// Генерирует стандартную целевую точку кешаута игрока
+    /// </summary>
+    /// <returns>Целевой мультипликатор</returns>
+    private static float SampleTargetStandard()
+    {
+        float r = UnityEngine.Random.Range(0f, 1f);
+        
+        if (r < 0.55f) return 1.10f + UnityEngine.Random.Range(0f, 1f) * 1.40f; // 1.10–2.50
+        if (r < 0.85f) return 2.50f + UnityEngine.Random.Range(0f, 1f) * 2.50f; // 2.50–5.00
+        if (r < 0.97f) return 5.00f + UnityEngine.Random.Range(0f, 1f) * 5.00f; // 5.00–10.00
+        return 10.00f + UnityEngine.Random.Range(0f, 1f) * 40.00f;             // 10.00–50.00
     }
     
     /// <summary>
