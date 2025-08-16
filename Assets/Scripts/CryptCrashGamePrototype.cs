@@ -260,7 +260,7 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public Color warnColor = new Color(1f, 0.85f, 0.2f);
 
     [Header("History")]
-    public string[] gameHistory = new string[7];
+    public string[] gameHistory = new string[4];
     private int historyCount = 0;
 
     private Func<double,double> animCurveFunc;
@@ -352,8 +352,8 @@ public class CryptCrashGamePrototype : MonoBehaviour
 
         if (betPlacedLocal && !settledThisRound)
         {
-            AddToHistory(string.Format("CRASH x{0:F2} (−{1:F2})", currentMultiplier, currentBet));
-            if (statusText) { statusText.text = string.Format(" Краш x{0:F2}. Проигрыш", currentMultiplier); statusText.color = loseColor; }
+            AddToHistory(string.Format("CRASH x{0:F2} (-{1:F2})", currentMultiplier, currentBet));
+            if (statusText) { statusText.text = string.Format("Краш x{0:F2}. Проигрыш", currentMultiplier); statusText.color = loseColor; }
         }
         else if (settledThisRound)
         {
@@ -426,12 +426,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
     {
         if (!isBettingPhase || betPlacedLocal) return;
         if (playerBalance < currentBet) { FlashStatus("Недостаточно средств", warnColor); return; }
-        if (targetMultiplier < 1.01f) { FlashStatus("Цель должна быть ≥ 1.01", warnColor); return; }
+        if (targetMultiplier < 1.01f) { FlashStatus("Цель должна быть >= 1.01", warnColor); return; }
 
         playerBalance -= currentBet;
         betPlacedLocal = true;
         server.SubmitBet((decimal)currentBet, targetMultiplier);
-        FlashStatus(string.Format(" Ставка {0:0.##} ", currentBet, targetMultiplier), winColor);
+        FlashStatus(string.Format("Ставка {0:0.##} принята", currentBet), winColor);
         UpdateUI();
     }
 
@@ -460,12 +460,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
             playerBalance += (float)payout;
             lastPayout = payout;
             settledThisRound = true;
-            FlashStatus(string.Format(" Выплата +{0:0.##} (x{1:0.00})", payout, payoutM), winColor);
+            FlashStatus(string.Format("Выплата +{0:0.##} (x{1:0.00})", payout, payoutM), winColor);
             AddToHistory(string.Format("WIN x{0:0.00} (+{1:0.##})", payoutM, payout));
         }
         else
         {
-            FlashStatus(" Кешаут отклонён (поздно)", warnColor);
+            FlashStatus("Кешаут отклонен (поздно)", warnColor);
         }
         UpdateUI();
     }
@@ -530,8 +530,8 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public void UpdateUI()
     {
         if (multiplierText) multiplierText.text = string.Format("x{0:F3}", currentMultiplier);
-        if (balanceText) balanceText.text = string.Format(" Баланс: {0:0.##}", playerBalance);
-        if (roundText) roundText.text = string.Format(" Раунд {0}", currentRound + 1);
+        if (balanceText) balanceText.text = string.Format("Баланс: {0:0.##}", playerBalance);
+        if (roundText) roundText.text = string.Format("Раунд {0}", currentRound + 1);
         if (betText)
         {
             if (betPlacedLocal && isGameRunning && !settledThisRound)
@@ -549,12 +549,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
             if (isBettingPhase)
             {
                 float left = Mathf.Max(0f, bettingPhaseDuration - bettingPhaseTime);
-                statusText.text = betPlacedLocal ? string.Format(" Ставка принята • Старт через {0:F1}с", left) : string.Format(" Фаза ставок • Осталось {0:F1}с", left);
+                statusText.text = betPlacedLocal ? string.Format("Ставка принята • Старт через {0:F1}с", left) : string.Format("Фаза ставок • Осталось {0:F1}с", left);
                 statusText.color = betPlacedLocal ? winColor : normalColor;
             }
             else if (isGameRunning)
             {
-                statusText.text = settledThisRound ? " Выплата зафиксирована" : " Игра идет...";
+                statusText.text = settledThisRound ? "Выплата зафиксирована" : "Игра идет...";
                 statusText.color = settledThisRound ? winColor : normalColor;
             }
             else
@@ -599,9 +599,9 @@ public class CryptCrashGamePrototype : MonoBehaviour
 
     private void AddToHistory(string s)
     {
-        // Ensure fixed capacity = 7
-        if (gameHistory == null || gameHistory.Length != 7)
-            gameHistory = new string[7];
+        // Ensure fixed capacity = 4
+        if (gameHistory == null || gameHistory.Length != 4)
+            gameHistory = new string[4];
 
         if (historyCount < gameHistory.Length)
         {
