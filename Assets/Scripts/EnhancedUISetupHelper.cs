@@ -7,16 +7,14 @@ using TMPro;
 /// </summary>
 public class EnhancedUISetupHelper : MonoBehaviour
 {
-    void Start()
+    private void Start()
     {
-        Debug.Log("🎨 Запуск улучшенной настройки UI...");
         SetupEnhancedUI();
     }
     
     [ContextMenu("Настроить улучшенный UI")]
     public void SetupEnhancedUI()
     {
-        Debug.Log("🔧 Создаем улучшенный UI...");
         
         // Создаем Canvas если его нет
         Canvas canvas = FindObjectOfType<Canvas>();
@@ -43,7 +41,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         // Настраиваем скрипт прототипа
         SetupPrototypeScript();
         
-        Debug.Log("✅ Улучшенный UI создан и настроен!");
     }
     
     private void CreateEnhancedUIElements()
@@ -55,7 +52,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         CreateEnhancedButtons(canvas);
         CreateEnhancedInfoTexts(canvas);
         
-        Debug.Log("✅ Все UI элементы созданы");
     }
     
     private void CreateEnhancedMultiplierText(Canvas canvas)
@@ -81,7 +77,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         rect.anchoredPosition = new Vector2(0, 0);
         rect.sizeDelta = new Vector2(400, 100);
         
-        Debug.Log("✅ Улучшенный MultiplierText создан");
     }
     
     private void CreateEnhancedButtons(Canvas canvas)
@@ -100,7 +95,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         
 
         
-        Debug.Log("✅ Улучшенные кнопки созданы");
     }
     
     private void CreateEnhancedButton(Canvas canvas, string name, string text, Vector2 position, Color color)
@@ -166,7 +160,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         // History Text - с рамкой
         CreateHistoryText(canvas, "HistoryText", "История:", new Vector2(0, -150));
         
-        Debug.Log("✅ Улучшенные информационные тексты созданы");
     }
     
     private void CreateEnhancedInfoText(Canvas canvas, string name, string text, Vector2 position)
@@ -265,7 +258,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         progressBar.fillRect = fillRect;
         progressBar.targetGraphic = bgImage;
         
-        Debug.Log("✅ Прогресс-бар создан успешно");
     }
     
     private void CreateHistoryText(Canvas canvas, string name, string text, Vector2 position)
@@ -303,7 +295,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
     
     private void SetupPrototypeScript()
     {
-        Debug.Log("🔧 Настраиваем скрипт прототипа...");
         
         CrashGamePrototype prototype = FindObjectOfType<CrashGamePrototype>();
         if (prototype == null)
@@ -322,68 +313,53 @@ public class EnhancedUISetupHelper : MonoBehaviour
         
         // Ищем все TextMeshProUGUI в сцене
         TextMeshProUGUI[] allTexts = FindObjectsOfType<TextMeshProUGUI>();
-        Debug.Log($"🔍 Найдено текстовых элементов: {allTexts.Length}");
         
         foreach (TextMeshProUGUI text in allTexts)
         {
-            Debug.Log($"🔍 Проверяем текст: {text.name}");
             switch (text.name)
             {
                 case "MultiplierText":
                     prototype.multiplierText = text;
-                    Debug.Log("✅ MultiplierText присвоен");
                     break;
                 case "BalanceText":
                     prototype.balanceText = text;
-                    Debug.Log("✅ BalanceText присвоен");
                     break;
                 case "BetText":
                     prototype.betText = text;
-                    Debug.Log("✅ BetText присвоен");
                     break;
                 case "StatusText":
                     prototype.statusText = text;
-                    Debug.Log("✅ StatusText присвоен");
                     break;
                 case "HistoryText":
                     prototype.historyText = text;
-                    Debug.Log("✅ HistoryText присвоен");
                     break;
                 case "FinalWinText":
                     prototype.finalWinText = text;
-                    Debug.Log("✅ FinalWinText присвоен");
                     break;
                 case "RoundText":
                     prototype.roundText = text;
-                    Debug.Log("✅ RoundText присвоен");
                     break;
             }
         }
         
         // Ищем все Button в сцене
         Button[] allButtons = FindObjectsOfType<Button>();
-        Debug.Log($"🔍 Найдено кнопок: {allButtons.Length}");
         
         foreach (Button button in allButtons)
         {
-            Debug.Log($"🔍 Проверяем кнопку: {button.name}");
             switch (button.name)
             {
                 case "PlaceBetButton":
                     prototype.placeBetButton = button;
-                    Debug.Log("✅ PlaceBetButton присвоен");
                     break;
                 case "CashoutButton":
                     prototype.cashoutButton = button;
-                    Debug.Log("✅ CashoutButton присвоен");
                     break;
                 case "IncreaseBetButton":
                     prototype.increaseBetButton = button;
-                    Debug.Log("✅ IncreaseBetButton присвоен");
                     break;
                 case "DecreaseBetButton":
                     prototype.decreaseBetButton = button;
-                    Debug.Log("✅ DecreaseBetButton присвоен");
                     break;
             }
         }
@@ -395,12 +371,9 @@ public class EnhancedUISetupHelper : MonoBehaviour
             if (slider.name == "BettingProgressBar")
             {
                 prototype.bettingProgressBar = slider;
-                Debug.Log("✅ BettingProgressBar присвоен");
                 break;
             }
         }
-        
-        Debug.Log("✅ Скрипт прототипа настроен");
         
         // Вызываем SetupUI для настройки обработчиков событий
         prototype.SetupUI();
@@ -409,7 +382,6 @@ public class EnhancedUISetupHelper : MonoBehaviour
         // Принудительно обновляем историю
         if (prototype.historyText != null)
         {
-            Debug.Log("✅ Принудительно обновляем историю");
             prototype.UpdateUI();
         }
         else
@@ -417,6 +389,5 @@ public class EnhancedUISetupHelper : MonoBehaviour
             Debug.LogError("❌ historyText все еще не найден!");
         }
         
-        Debug.Log("✅ Все обработчики событий настроены");
     }
 } 
