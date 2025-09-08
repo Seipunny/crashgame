@@ -253,15 +253,47 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public Button increaseBetButton;
     public Button decreaseBetButton;
 
+    [Header("Audio")]
+    public AudioSource buttonClickAudioSource;
+
+    [Header("Auto Cashout UI")]
+    public TextMeshProUGUI autoCashoutLabel;
+    public Toggle autoCashoutToggle;
+    public Button autoCashoutIncreaseButton;
+    public Button autoCashoutDecreaseButton;
+
     [Header("UI Colors")]
     public Color normalColor = Color.white;
     public Color winColor = Color.green;
     public Color loseColor = Color.red;
     public Color warnColor = new Color(1f, 0.85f, 0.2f);
+    public Color noBetColor = Color.yellow;
+
+    [Header("Auto Cashout Settings")]
+    public bool autoCashoutEnabled = false;
+    public float autoCashoutMultiplier = 2f;
+    public float minAutoCashoutMultiplier = 1.1f;
+    public float maxAutoCashoutMultiplier = 100f;
+    public float autoCashoutStep = 1f;
 
     [Header("History")]
-    public string[] gameHistory = new string[4];
+    public HistoryEntry[] gameHistory = new HistoryEntry[9];
     private int historyCount = 0;
+
+    public enum BetResult { Win, Loss, NoBet }
+    
+    [System.Serializable]
+    public class HistoryEntry
+    {
+        public float multiplier;
+        public BetResult result;
+        
+        public HistoryEntry(float mult, BetResult res)
+        {
+            multiplier = mult;
+            result = res;
+        }
+    }
 
     private Func<double,double> animCurveFunc;
 
@@ -298,6 +330,10 @@ public class CryptCrashGamePrototype : MonoBehaviour
 
         gameTime += Time.deltaTime;
         currentMultiplier = MultiplierAtTime(gameTime);
+        
+        // Check for auto cashout
+        CheckAutoCashout();
+        
         if (currentMultiplier >= (float)crashPoint) {
             HandleCrash();
         }
@@ -350,18 +386,16 @@ public class CryptCrashGamePrototype : MonoBehaviour
         if (!isGameRunning) return;
         isGameRunning = false;
 
+        TriggerHaptic("hard");
+
         if (betPlacedLocal && !settledThisRound)
         {
-            AddToHistory(string.Format("CRASH x{0:F2} (-{1:F2})", currentMultiplier, currentBet));
-            if (statusText) { statusText.text = string.Format("Краш x{0:F2}. Проигрыш", currentMultiplier); statusText.color = loseColor; }
+            AddToHistory(currentMultiplier, BetResult.Loss);
+            if (statusText) { statusText.text = string.Format("Краш {0:F2}x. Проигрыш", currentMultiplier); statusText.color = loseColor; }
         }
-        else if (settledThisRound)
+        else if (!betPlacedLocal)
         {
-            AddToHistory(string.Format("CRASH x{0:F2} (победа уже зафиксирована)", currentMultiplier));
-        }
-        else
-        {
-            AddToHistory(string.Format("CRASH x{0:F2} (наблюдение)", currentMultiplier));
+            AddToHistory(currentMultiplier, BetResult.NoBet);
         }
 
         UpdateRevealPanel();
@@ -382,6 +416,11 @@ public class CryptCrashGamePrototype : MonoBehaviour
         if (manualCashoutButton != null) { manualCashoutButton.onClick.RemoveAllListeners(); manualCashoutButton.onClick.AddListener(ManualCashout); }
         if (increaseBetButton != null) { increaseBetButton.onClick.RemoveAllListeners(); increaseBetButton.onClick.AddListener(() => AdjustBet(+betStep)); }
         if (decreaseBetButton != null) { decreaseBetButton.onClick.RemoveAllListeners(); decreaseBetButton.onClick.AddListener(() => AdjustBet(-betStep)); }
+
+        // Auto Cashout UI Setup
+        if (autoCashoutToggle != null) { autoCashoutToggle.onValueChanged.RemoveAllListeners(); autoCashoutToggle.onValueChanged.AddListener(OnAutoCashoutToggle); }
+        if (autoCashoutIncreaseButton != null) { autoCashoutIncreaseButton.onClick.RemoveAllListeners(); autoCashoutIncreaseButton.onClick.AddListener(() => AdjustAutoCashout(+autoCashoutStep)); }
+        if (autoCashoutDecreaseButton != null) { autoCashoutDecreaseButton.onClick.RemoveAllListeners(); autoCashoutDecreaseButton.onClick.AddListener(() => AdjustAutoCashout(-autoCashoutStep)); }
 
         if (betInput != null)
         {
@@ -415,6 +454,9 @@ public class CryptCrashGamePrototype : MonoBehaviour
             });
             latencyInput.text = simulatedRttMs.ToString("0");
         }
+        
+        // Initialize auto cashout UI
+        UpdateAutoCashoutUI();
         UpdateUI();
     }
 
@@ -422,12 +464,74 @@ public class CryptCrashGamePrototype : MonoBehaviour
     public void IncreaseBet() { AdjustBet(+betStep); }
     public void DecreaseBet() { AdjustBet(-betStep); }
 
+    // Auto Cashout Methods
+    public void OnAutoCashoutToggle(bool isEnabled)
+    {
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
+        autoCashoutEnabled = isEnabled;
+        UpdateAutoCashoutUI();
+    }
+
+    public void AdjustAutoCashout(float delta)
+    {
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
+        autoCashoutMultiplier = Mathf.Clamp(autoCashoutMultiplier + delta, minAutoCashoutMultiplier, maxAutoCashoutMultiplier);
+        UpdateAutoCashoutUI();
+    }
+
+    private void UpdateAutoCashoutUI()
+    {
+        if (autoCashoutLabel != null)
+        {
+            autoCashoutLabel.text = string.Format("AUTO CASHOUT\nX {0:F0}", autoCashoutMultiplier);
+        }
+        
+        if (autoCashoutToggle != null)
+        {
+            autoCashoutToggle.isOn = autoCashoutEnabled;
+        }
+    }
+
+    private void CheckAutoCashout()
+    {
+        // Only check if auto cashout is enabled, we have a bet placed, game is running, and we haven't settled yet
+        if (!autoCashoutEnabled || !betPlacedLocal || !isGameRunning || settledThisRound) return;
+        
+        // Check if current multiplier has reached the exact auto cashout target (with small tolerance for float precision)
+        float tolerance = 0.001f; // Very small tolerance for float comparison
+        if (currentMultiplier >= (autoCashoutMultiplier - tolerance))
+        {
+            // Perform automatic cashout using the exact target multiplier
+            PerformAutoCashout();
+        }
+    }
+
+    private void PerformAutoCashout()
+    {
+        if (!isGameRunning || settledThisRound || !betPlacedLocal) return;
+        
+        // Use the EXACT target multiplier for payout, not current multiplier
+        decimal payout = (decimal)autoCashoutMultiplier * (decimal)currentBet;
+        playerBalance += (float)payout;
+        lastPayout = payout;
+        settledThisRound = true;
+        
+        FlashStatus(string.Format("AUTO CASHOUT +{0:0.##} (x{1:0.00})", payout, autoCashoutMultiplier), winColor);
+        AddToHistory(autoCashoutMultiplier, BetResult.Win);
+        
+        UpdateUI();
+    }
+
     private void PlaceBet()
     {
         if (!isBettingPhase || betPlacedLocal) return;
         if (playerBalance < currentBet) { FlashStatus("Недостаточно средств", warnColor); return; }
         if (targetMultiplier < 1.01f) { FlashStatus("Цель должна быть >= 1.01", warnColor); return; }
 
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
         playerBalance -= currentBet;
         betPlacedLocal = true;
         server.SubmitBet((decimal)currentBet, targetMultiplier);
@@ -438,6 +542,8 @@ public class CryptCrashGamePrototype : MonoBehaviour
     private void CancelBet()
     {
         if (!isBettingPhase || !betPlacedLocal) return;
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
         playerBalance += currentBet;
         betPlacedLocal = false;
         FlashStatus("Ставка отменена", normalColor);
@@ -448,6 +554,8 @@ public class CryptCrashGamePrototype : MonoBehaviour
     {
         if (!isGameRunning || settledThisRound || !betPlacedLocal) return;
 
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
         double requestTime = gameTime;
         bool accepted = server.TryManualCashout(currentMultiplier, requestTime, simulatedRttMs);
 
@@ -461,7 +569,7 @@ public class CryptCrashGamePrototype : MonoBehaviour
             lastPayout = payout;
             settledThisRound = true;
             FlashStatus(string.Format("Выплата +{0:0.##} (x{1:0.00})", payout, payoutM), winColor);
-            AddToHistory(string.Format("WIN x{0:0.00} (+{1:0.##})", payoutM, payout));
+            AddToHistory(payoutM, BetResult.Win);
         }
         else
         {
@@ -473,6 +581,8 @@ public class CryptCrashGamePrototype : MonoBehaviour
     private void AdjustBet(float delta)
     {
         if (isGameRunning || betPlacedLocal) return;
+        if (buttonClickAudioSource) buttonClickAudioSource.Play();
+        TriggerHaptic("medium");
         currentBet = Mathf.Clamp(currentBet + delta, minBet, maxBet);
         if (betInput) betInput.text = currentBet.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         UpdateUI();
@@ -529,19 +639,12 @@ public class CryptCrashGamePrototype : MonoBehaviour
 
     public void UpdateUI()
     {
-        if (multiplierText) multiplierText.text = string.Format("x{0:F3}", currentMultiplier);
-        if (balanceText) balanceText.text = string.Format("Баланс: {0:0.##}", playerBalance);
+        if (multiplierText) multiplierText.text = string.Format("{0:F2}x", currentMultiplier);
+        if (balanceText) balanceText.text = string.Format("${0:0.##}", playerBalance);
         if (roundText) roundText.text = string.Format("Раунд {0}", currentRound + 1);
         if (betText)
         {
-            if (betPlacedLocal && isGameRunning && !settledThisRound)
-                betText.text = string.Format("Ставка: {0:0.##} | Текущ.: x{2:F2}", currentBet, targetMultiplier, currentMultiplier);
-            else if (settledThisRound)
-                betText.text = string.Format("Выплата: +{0:0.##}", lastPayout);
-            else if (betPlacedLocal)
-                betText.text = string.Format("Ставка: {0:0.##} ", currentBet, targetMultiplier);
-            else
-                betText.text = string.Format("Ставка: {0:0.##} ", currentBet, targetMultiplier);
+            betText.text = string.Format("BET AMOUNT\n${0:0.##}", currentBet);
         }
 
         if (statusText)
@@ -593,45 +696,83 @@ public class CryptCrashGamePrototype : MonoBehaviour
         sb.AppendLine("HMAC: " + lastReveal.HmacHex);
         sb.AppendLine("u52: " + lastReveal.U52);
         sb.AppendLine("U: " + lastReveal.U01.ToString("F12"));
-        sb.AppendLine("Crash M: x" + lastReveal.CrashPoint.ToString("F2"));
+        sb.AppendLine("Crash M: " + lastReveal.CrashPoint.ToString("F2") + "x");
         revealText.text = sb.ToString();
     }
 
-    private void AddToHistory(string s)
+    private void AddToHistory(float multiplier, BetResult result)
     {
-        // Ensure fixed capacity = 4
-        if (gameHistory == null || gameHistory.Length != 4)
-            gameHistory = new string[4];
+        // Ensure fixed capacity = 9
+        if (gameHistory == null || gameHistory.Length != 9)
+            gameHistory = new HistoryEntry[9];
+
+        var entry = new HistoryEntry(multiplier, result);
 
         if (historyCount < gameHistory.Length)
         {
             // Append to the end while not full
-            gameHistory[historyCount] = s;
+            gameHistory[historyCount] = entry;
             historyCount++;
         }
         else
         {
-            // Full: drop index 0, shift others down, put new at index 6
+            // Full: drop index 0, shift others down, put new at index 8
             for (int i = 1; i < gameHistory.Length; i++)
                 gameHistory[i - 1] = gameHistory[i];
-            gameHistory[gameHistory.Length - 1] = s;
+            gameHistory[gameHistory.Length - 1] = entry;
         }
 
-        if (historyText)
+        UpdateHistoryDisplay();
+    }
+
+    private void UpdateHistoryDisplay()
+    {
+        if (historyText == null) return;
+
+        var sb = new StringBuilder();
+        int count = Mathf.Min(historyCount, gameHistory.Length);
+        
+        for (int i = 0; i < count; i++)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("История:");
-            int count = Mathf.Min(historyCount, gameHistory.Length);
-            for (int i = 0; i < count; i++)
+            if (gameHistory[i] != null)
             {
-                if (!string.IsNullOrEmpty(gameHistory[i])) sb.AppendLine(gameHistory[i]);
+                if (i > 0) sb.Append(" ");
+                
+                string colorHex;
+                switch (gameHistory[i].result)
+                {
+                    case BetResult.Win:
+                        colorHex = ColorUtility.ToHtmlStringRGB(winColor);
+                        break;
+                    case BetResult.Loss:
+                        colorHex = ColorUtility.ToHtmlStringRGB(loseColor);
+                        break;
+                    case BetResult.NoBet:
+                        colorHex = ColorUtility.ToHtmlStringRGB(noBetColor);
+                        break;
+                    default:
+                        colorHex = ColorUtility.ToHtmlStringRGB(normalColor);
+                        break;
+                }
+                
+                sb.Append(string.Format("<color=#{0}>{1:F2}x</color>", colorHex, gameHistory[i].multiplier));
             }
-            historyText.text = sb.ToString();
         }
+        
+        historyText.text = sb.ToString();
     }
 
     private void FlashStatus(string msg, Color c)
     {
         if (statusText) { statusText.text = msg; statusText.color = c; }
+    }
+
+    public void TriggerHaptic(string type)
+    {
+#if !UNITY_EDITOR && !UNITY_STANDALONE
+        Application.ExternalCall("handleHapticFeedbackEvent", type);
+#else
+        //Debug.Log("Trigger");
+#endif
     }
 }

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Admin/Downloads/**)",
+      "Read(//c/Users/Admin/Desktop/Unity Projects/crashgame/**)",
+      "WebSearch",
+      "Bash(move:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
